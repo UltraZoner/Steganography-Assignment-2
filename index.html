@@ -23,8 +23,9 @@
             padding: 0;
             display: flex;
             flex-direction: column;
-            height: 100vh;
+            min-height: 100vh; /* Changed from height to min-height for mobile scrolling */
         }
+        
         /* Navigation (Tabs) */
         nav {
             background-color: #020617;
@@ -32,13 +33,19 @@
             display: flex;
             gap: 10px;
             border-bottom: 2px solid var(--border-color);
+            flex-wrap: wrap; /* Allows buttons to wrap on small screens */
+            align-items: center;
         }
-        nav h2 { margin: 0; margin-right: auto; padding-top: 5px; color: var(--accent); }
+        nav h2 { 
+            margin: 0; 
+            margin-right: auto; 
+            color: var(--accent); 
+        }
         .tab-btn {
             background: transparent;
             color: var(--text-main);
             border: 1px solid transparent;
-            padding: 10px 20px;
+            padding: 10px 15px;
             cursor: pointer;
             border-radius: 5px;
             font-weight: bold;
@@ -53,8 +60,9 @@
             flex: 1;
             padding: 20px;
             gap: 20px;
-            overflow: hidden;
+            /* Removed overflow: hidden so mobile users can scroll normally */
         }
+        
         /* Left Panel - Controls */
         .controls {
             flex: 1;
@@ -62,7 +70,6 @@
             padding: 20px;
             border-radius: 8px;
             border: 1px solid var(--border-color);
-            overflow-y: auto;
         }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; }
@@ -94,7 +101,6 @@
         }
         button.action-btn:hover { background-color: var(--accent-hover); }
 
-        /* Explicit Download Button Styling */
         button.download-btn {
             background-color: var(--success);
             margin-top: 10px;
@@ -124,12 +130,31 @@
             align-items: center;
             padding: 10px;
         }
-        .img-box h3 { margin: 0 0 10px 0; font-size: 1em; }
+        .img-box h3 { margin: 0 0 10px 0; font-size: 1em; text-align: center; }
         canvas {
             max-width: 100%;
-            max-height: 350px;
+            height: auto; /* Keeps aspect ratio correct */
             background: #000;
             border: 1px dashed #475569;
+        }
+
+        /* --- MOBILE RESPONSIVENESS --- */
+        @media (max-width: 850px) {
+            .container {
+                flex-direction: column; /* Stacks controls on top of images */
+                padding: 10px;
+            }
+            .image-panels {
+                flex-direction: column; /* Stacks Before image on top of After image */
+            }
+            nav {
+                justify-content: center;
+            }
+            nav h2 {
+                width: 100%;
+                text-align: center;
+                margin-bottom: 10px;
+            }
         }
     </style>
 </head>
