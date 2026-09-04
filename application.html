@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Steganography Studio</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --text-main: #f8fafc;
+            --accent: #38bdf8;
+            --accent-hover: #0284c7;
+            --border-color: #334155;
+            --success: #22c55e;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        /* Navigation (Tabs) */
+        nav {
+            background-color: #020617;
+            padding: 10px 20px;
+            display: flex;
+            gap: 10px;
+            border-bottom: 2px solid var(--border-color);
+        }
+        nav h2 { margin: 0; margin-right: auto; padding-top: 5px; color: var(--accent); }
+        .tab-btn {
+            background: transparent;
+            color: var(--text-main);
+            border: 1px solid transparent;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+        .tab-btn.active { background-color: var(--panel-bg); border-color: var(--border-color); color: var(--accent); }
+        .tab-btn:hover { background-color: var(--panel-bg); }
+
+        /* Main Layout */
+        .container {
+            display: flex;
+            flex: 1;
+            padding: 20px;
+            gap: 20px;
+            overflow: hidden;
+        }
+        /* Left Panel - Controls */
+        .controls {
+            flex: 1;
+            background: var(--panel-bg);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            overflow-y: auto;
+        }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; }
+        select, input[type="file"], input[type="range"], textarea {
+            width: 100%;
+            padding: 8px;
+            background: #0f172a;
+            color: white;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea { height: 100px; resize: vertical; }
+        .dynamic-config { display: none; padding: 10px; background: #020617; border-radius: 5px; margin-bottom: 15px; }
+        .dynamic-config.active { display: block; }
+        
+        button.action-btn {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 10px;
+        }
+        button.action-btn:hover { background-color: var(--accent-hover); }
+
+        /* Right Panel - Visuals */
+        .visuals {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .image-panels {
+            display: flex;
+            gap: 15px;
+            flex: 1;
+        }
+        .img-box {
+            flex: 1;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+        }
+        .img-box h3 { margin: 0 0 10px 0; font-size: 1em; }
+        canvas {
+            max-width: 100%;
+            max-height: 300px;
+            background: #000;
+            border: 1px dashed #475569;
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <h2>Steganography Studio</h2>
+        <button class="tab-btn active" onclick="switchTab('LSB')">LSB</button>
+        <button class="tab-btn" onclick="switchTab('MSB')">MSB</button>
+        <button class="tab-btn" onclick="switchTab('PVD')">PVD</button>
+        <button class="tab-btn" onclick="switchTab('BPCS')">BPCS</button>
+    </nav>
+
+    <div class="container">
+        <!-- Controls Panel -->
+        <aside class="controls">
+            <div class="form-group">
+                <label>1. Mode</label>
+                <select id="processMode">
+                    <option value="hide">Hide Message (Embed)</option>
+                    <option value="extract">Extract Message</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>2. Cover/Stego Image</label>
+                <input type="file" id="imageInput" accept="image/png, image/bmp, image/jpeg">
+            </div>
+
+            <!-- Dynamic Configurations based on Tab -->
+            <div id="config-LSB" class="dynamic-config active">
+                <label>LSB Config: Bitmask</label>
+                <select id="lsbBits">
+                    <option value="1">1-bit (Lowest)</option>
+                    <option value="2">2-bit</option>
+                </select>
+            </div>
+            <div id="config-MSB" class="dynamic-config">
+                <label>MSB Config: Target Bit</label>
+                <select id="msbBits">
+                    <option value="7">Bit 7 (Highest)</option>
+                    <option value="6">Bit 6</option>
+                </select>
+            </div>
+            <div id="config-PVD" class="dynamic-config">
+                <label>PVD Config: Colour Order</label>
+                <select id="pvdColor">
+                    <option value="rgb">RGB</option>
+                    <option value="bgr">BGR</option>
+                </select>
+            </div>
+            <div id="config-BPCS" class="dynamic-config">
+                <label>BPCS Config: Complexity Threshold (α)</label>
+                <input type="range" id="bpcsThreshold" min="0" max="1" step="0.1" value="0.3">
+                <span id="thresholdVal">0.3</span>
+            </div>
+
+            <div class="form-group">
+                <label>3. Secret Message (To Embed)</label>
+                <textarea id="secretInput" placeholder="Type your secret message here..."></textarea>
+            </div>
+
+            <button class="action-btn" onclick="runProcess()">Run Process</button>
+
+            <div class="form-group" style="margin-top: 15px;">
+                <label>4. Extracted Message Output</label>
+                <textarea id="extractedOutput" readonly placeholder="Extracted text will appear here..."></textarea>
+            </div>
+        </aside>
+
+        <!-- Visuals Panel -->
+        <main class="visuals">
+            <div class="image-panels">
+                <div class="img-box">
+                    <h3>Original Image (Before)</h3>
+                    <canvas id="canvasBefore"></canvas>
+                </div>
+                <div class="img-box">
+                    <h3>Stego Image (After)</h3>
+                    <canvas id="canvasAfter"></canvas>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let currentAlgorithm = 'LSB';
+        const ctxBefore = document.getElementById('canvasBefore').getContext('2d');
+        const ctxAfter = document.getElementById('canvasAfter').getContext('2d');
+        let originalImageData = null;
+
+        // UI Logic: Switch Tabs & Menus
+        function switchTab(algo) {
+            currentAlgorithm = algo;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            document.querySelectorAll('.dynamic-config').forEach(div => div.classList.remove('active'));
+            document.getElementById(`config-${algo}`).classList.add('active');
+        }
+
+        // UI Logic: Update Range Slider Label
+        document.getElementById('bpcsThreshold').addEventListener('input', function() {
+            document.getElementById('thresholdVal').innerText = this.value;
+        });
+
+        // Image Handling: Load file onto Canvas
+        document.getElementById('imageInput').addEventListener('change', function(e) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvasB = document.getElementById('canvasBefore');
+                    canvasB.width = img.width; canvasB.height = img.height;
+                    ctxBefore.drawImage(img, 0, 0);
+                    originalImageData = ctxBefore.getImageData(0, 0, img.width, img.height);
+                    
+                    // Mirror to After canvas initially
+                    const canvasA = document.getElementById('canvasAfter');
+                    canvasA.width = img.width; canvasA.height = img.height;
+                    ctxAfter.putImageData(originalImageData, 0, 0);
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(e.target.files[0]);
+        });
+
+        // Core Routing Engine
+        function runProcess() {
+            const mode = document.getElementById('processMode').value;
+            if (!originalImageData) { alert("Please upload an image first!"); return; }
+
+            if (mode === 'hide') {
+                const msg = document.getElementById('secretInput').value;
+                if (!msg) { alert("Please enter a secret message!"); return; }
+                
+                // Clone image data for processing
+                let imgData = new ImageData(
+                    new Uint8ClampedArray(originalImageData.data),
+                    originalImageData.width,
+                    originalImageData.height
+                );
+
+                if (currentAlgorithm === 'LSB') embedLSB(imgData, msg);
+                else alert(`${currentAlgorithm} embedding logic needs to be implemented.`);
+            } 
+            else if (mode === 'extract') {
+                let imgData = ctxAfter.getImageData(0, 0, document.getElementById('canvasAfter').width, document.getElementById('canvasAfter').height);
+                
+                if (currentAlgorithm === 'LSB') extractLSB(imgData);
+                else alert(`${currentAlgorithm} extraction logic needs to be implemented.`);
+            }
+        }
+
+        // --- STEGANOGRAPHY ALGORITHMS ---
+
+        // 1. LSB Embedding (Functional Demo)
+        function embedLSB(imgData, message) {
+            // Append a delimiter so extraction knows when to stop
+            const payload = message + '|||'; 
+            let binaryMsg = '';
+            for (let i = 0; i < payload.length; i++) {
+                let bin = payload[i].charCodeAt(0).toString(2).padStart(8, '0');
+                binaryMsg += bin;
+            }
+
+            let data = imgData.data;
+            let msgIndex = 0;
+
+            for (let i = 0; i < data.length; i++) {
+                if ((i + 1) % 4 === 0) continue; // Skip Alpha channel
+                if (msgIndex < binaryMsg.length) {
+                    // Clear lowest bit and set it to message bit
+                    data[i] = (data[i] & 0xFE) | parseInt(binaryMsg[msgIndex]);
+                    msgIndex++;
+                } else {
+                    break; // Message fully embedded
+                }
+            }
+
+            ctxAfter.putImageData(imgData, 0, 0);
+            alert("Message successfully embedded using LSB!");
+        }
+
+        // 2. LSB Extraction (Functional Demo)
+        function extractLSB(imgData) {
+            let data = imgData.data;
+            let binaryMsg = '';
+            
+            // Read lowest bits
+            for (let i = 0; i < data.length; i++) {
+                if ((i + 1) % 4 === 0) continue; // Skip Alpha
+                binaryMsg += (data[i] & 1).toString();
+            }
+
+            // Convert binary back to string
+            let extractedText = '';
+            for (let i = 0; i < binaryMsg.length; i += 8) {
+                let byte = binaryMsg.slice(i, i + 8);
+                if (byte.length === 8) {
+                    extractedText += String.fromCharCode(parseInt(byte, 2));
+                }
+            }
+
+            // Slice at delimiter
+            let delimiterIndex = extractedText.indexOf('|||');
+            if (delimiterIndex !== -1) {
+                document.getElementById('extractedOutput').value = extractedText.substring(0, delimiterIndex);
+                alert("Message successfully extracted!");
+            } else {
+                document.getElementById('extractedOutput').value = "No valid message found or image corrupted.";
+            }
+        }
+
+        // TODO: MSB, PVD, BPCS logic stubs
+        // function embedBPCS(imgData, message, threshold) { ... }
+        // function extractBPCS(imgData) { ... }
+
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Steganography Studio</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --text-main: #f8fafc;
+            --accent: #38bdf8;
+            --accent-hover: #0284c7;
+            --border-color: #334155;
+            --success: #22c55e;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        /* Navigation (Tabs) */
+        nav {
+            background-color: #020617;
+            padding: 10px 20px;
+            display: flex;
+            gap: 10px;
+            border-bottom: 2px solid var(--border-color);
+        }
+        nav h2 { margin: 0; margin-right: auto; padding-top: 5px; color: var(--accent); }
+        .tab-btn {
+            background: transparent;
+            color: var(--text-main);
+            border: 1px solid transparent;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+        .tab-btn.active { background-color: var(--panel-bg); border-color: var(--border-color); color: var(--accent); }
+        .tab-btn:hover { background-color: var(--panel-bg); }
+
+        /* Main Layout */
+        .container {
+            display: flex;
+            flex: 1;
+            padding: 20px;
+            gap: 20px;
+            overflow: hidden;
+        }
+        /* Left Panel - Controls */
+        .controls {
+            flex: 1;
+            background: var(--panel-bg);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            overflow-y: auto;
+        }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; }
+        select, input[type="file"], input[type="range"], textarea {
+            width: 100%;
+            padding: 8px;
+            background: #0f172a;
+            color: white;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea { height: 100px; resize: vertical; }
+        .dynamic-config { display: none; padding: 10px; background: #020617; border-radius: 5px; margin-bottom: 15px; }
+        .dynamic-config.active { display: block; }
+        
+        button.action-btn {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 10px;
+        }
+        button.action-btn:hover { background-color: var(--accent-hover); }
+
+        /* Right Panel - Visuals */
+        .visuals {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .image-panels {
+            display: flex;
+            gap: 15px;
+            flex: 1;
+        }
+        .img-box {
+            flex: 1;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+        }
+        .img-box h3 { margin: 0 0 10px 0; font-size: 1em; }
+        canvas {
+            max-width: 100%;
+            max-height: 300px;
+            background: #000;
+            border: 1px dashed #475569;
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <h2>Steganography Studio</h2>
+        <button class="tab-btn active" onclick="switchTab('LSB')">LSB</button>
+        <button class="tab-btn" onclick="switchTab('MSB')">MSB</button>
+        <button class="tab-btn" onclick="switchTab('PVD')">PVD</button>
+        <button class="tab-btn" onclick="switchTab('BPCS')">BPCS</button>
+    </nav>
+
+    <div class="container">
+        <!-- Controls Panel -->
+        <aside class="controls">
+            <div class="form-group">
+                <label>1. Mode</label>
+                <select id="processMode">
+                    <option value="hide">Hide Message (Embed)</option>
+                    <option value="extract">Extract Message</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>2. Cover/Stego Image</label>
+                <input type="file" id="imageInput" accept="image/png, image/bmp, image/jpeg">
+            </div>
+
+            <!-- Dynamic Configurations based on Tab -->
+            <div id="config-LSB" class="dynamic-config active">
+                <label>LSB Config: Bitmask</label>
+                <select id="lsbBits">
+                    <option value="1">1-bit (Lowest)</option>
+                    <option value="2">2-bit</option>
+                </select>
+            </div>
+            <div id="config-MSB" class="dynamic-config">
+                <label>MSB Config: Target Bit</label>
+                <select id="msbBits">
+                    <option value="7">Bit 7 (Highest)</option>
+                    <option value="6">Bit 6</option>
+                </select>
+            </div>
+            <div id="config-PVD" class="dynamic-config">
+                <label>PVD Config: Colour Order</label>
+                <select id="pvdColor">
+                    <option value="rgb">RGB</option>
+                    <option value="bgr">BGR</option>
+                </select>
+            </div>
+            <div id="config-BPCS" class="dynamic-config">
+                <label>BPCS Config: Complexity Threshold (α)</label>
+                <input type="range" id="bpcsThreshold" min="0" max="1" step="0.1" value="0.3">
+                <span id="thresholdVal">0.3</span>
+            </div>
+
+            <div class="form-group">
+                <label>3. Secret Message (To Embed)</label>
+                <textarea id="secretInput" placeholder="Type your secret message here..."></textarea>
+            </div>
+
+            <button class="action-btn" onclick="runProcess()">Run Process</button>
+
+            <div class="form-group" style="margin-top: 15px;">
+                <label>4. Extracted Message Output</label>
+                <textarea id="extractedOutput" readonly placeholder="Extracted text will appear here..."></textarea>
+            </div>
+        </aside>
+
+        <!-- Visuals Panel -->
+        <main class="visuals">
+            <div class="image-panels">
+                <div class="img-box">
+                    <h3>Original Image (Before)</h3>
+                    <canvas id="canvasBefore"></canvas>
+                </div>
+                <div class="img-box">
+                    <h3>Stego Image (After)</h3>
+                    <canvas id="canvasAfter"></canvas>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let currentAlgorithm = 'LSB';
+        const ctxBefore = document.getElementById('canvasBefore').getContext('2d');
+        const ctxAfter = document.getElementById('canvasAfter').getContext('2d');
+        let originalImageData = null;
+
+        // UI Logic: Switch Tabs & Menus
+        function switchTab(algo) {
+            currentAlgorithm = algo;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            document.querySelectorAll('.dynamic-config').forEach(div => div.classList.remove('active'));
+            document.getElementById(`config-${algo}`).classList.add('active');
+        }
+
+        // UI Logic: Update Range Slider Label
+        document.getElementById('bpcsThreshold').addEventListener('input', function() {
+            document.getElementById('thresholdVal').innerText = this.value;
+        });
+
+        // Image Handling: Load file onto Canvas
+        document.getElementById('imageInput').addEventListener('change', function(e) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvasB = document.getElementById('canvasBefore');
+                    canvasB.width = img.width; canvasB.height = img.height;
+                    ctxBefore.drawImage(img, 0, 0);
+                    originalImageData = ctxBefore.getImageData(0, 0, img.width, img.height);
+                    
+                    // Mirror to After canvas initially
+                    const canvasA = document.getElementById('canvasAfter');
+                    canvasA.width = img.width; canvasA.height = img.height;
+                    ctxAfter.putImageData(originalImageData, 0, 0);
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(e.target.files[0]);
+        });
+
+        // Core Routing Engine
+        function runProcess() {
+            const mode = document.getElementById('processMode').value;
+            if (!originalImageData) { alert("Please upload an image first!"); return; }
+
+            if (mode === 'hide') {
+                const msg = document.getElementById('secretInput').value;
+                if (!msg) { alert("Please enter a secret message!"); return; }
+                
+                // Clone image data for processing
+                let imgData = new ImageData(
+                    new Uint8ClampedArray(originalImageData.data),
+                    originalImageData.width,
+                    originalImageData.height
+                );
+
+                if (currentAlgorithm === 'LSB') embedLSB(imgData, msg);
+                else alert(`${currentAlgorithm} embedding logic needs to be implemented.`);
+            } 
+            else if (mode === 'extract') {
+                let imgData = ctxAfter.getImageData(0, 0, document.getElementById('canvasAfter').width, document.getElementById('canvasAfter').height);
+                
+                if (currentAlgorithm === 'LSB') extractLSB(imgData);
+                else alert(`${currentAlgorithm} extraction logic needs to be implemented.`);
+            }
+        }
+
+        // --- STEGANOGRAPHY ALGORITHMS ---
+
+        // 1. LSB Embedding (Functional Demo)
+        function embedLSB(imgData, message) {
+            // Append a delimiter so extraction knows when to stop
+            const payload = message + '|||'; 
+            let binaryMsg = '';
+            for (let i = 0; i < payload.length; i++) {
+                let bin = payload[i].charCodeAt(0).toString(2).padStart(8, '0');
+                binaryMsg += bin;
+            }
+
+            let data = imgData.data;
+            let msgIndex = 0;
+
+            for (let i = 0; i < data.length; i++) {
+                if ((i + 1) % 4 === 0) continue; // Skip Alpha channel
+                if (msgIndex < binaryMsg.length) {
+                    // Clear lowest bit and set it to message bit
+                    data[i] = (data[i] & 0xFE) | parseInt(binaryMsg[msgIndex]);
+                    msgIndex++;
+                } else {
+                    break; // Message fully embedded
+                }
+            }
+
+            ctxAfter.putImageData(imgData, 0, 0);
+            alert("Message successfully embedded using LSB!");
+        }
+
+        // 2. LSB Extraction (Functional Demo)
+        function extractLSB(imgData) {
+            let data = imgData.data;
+            let binaryMsg = '';
+            
+            // Read lowest bits
+            for (let i = 0; i < data.length; i++) {
+                if ((i + 1) % 4 === 0) continue; // Skip Alpha
+                binaryMsg += (data[i] & 1).toString();
+            }
+
+            // Convert binary back to string
+            let extractedText = '';
+            for (let i = 0; i < binaryMsg.length; i += 8) {
+                let byte = binaryMsg.slice(i, i + 8);
+                if (byte.length === 8) {
+                    extractedText += String.fromCharCode(parseInt(byte, 2));
+                }
+            }
+
+            // Slice at delimiter
+            let delimiterIndex = extractedText.indexOf('|||');
+            if (delimiterIndex !== -1) {
+                document.getElementById('extractedOutput').value = extractedText.substring(0, delimiterIndex);
+                alert("Message successfully extracted!");
+            } else {
+                document.getElementById('extractedOutput').value = "No valid message found or image corrupted.";
+            }
+        }
+
+        // TODO: MSB, PVD, BPCS logic stubs
+        // function embedBPCS(imgData, message, threshold) { ... }
+        // function extractBPCS(imgData) { ... }
+
+    </script>
+</body>
+</html>
