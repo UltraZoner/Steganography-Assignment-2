@@ -94,9 +94,11 @@
         }
         button.action-btn:hover { background-color: var(--accent-hover); }
 
+        /* Explicit Download Button Styling */
         button.download-btn {
             background-color: var(--success);
             margin-top: 10px;
+            border: 2px solid #14532d;
         }
         button.download-btn:hover { background-color: var(--success-hover); }
 
@@ -173,13 +175,12 @@
             </div>
             <div id="config-PVD" class="dynamic-config">
                 <label>PVD Config: Status</label>
-                <p style="margin:0; font-size: 0.85em; color: #94a3b8;">Uses 1D adjacent pixel differencing to determine embedding capacity dynamically.</p>
+                <p style="margin:0; font-size: 0.85em; color: #94a3b8;">Uses 1D adjacent pixel differencing.</p>
             </div>
             <div id="config-BPCS" class="dynamic-config">
                 <label>BPCS Config: Complexity Threshold (α)</label>
                 <input type="range" id="bpcsThreshold" min="0" max="1" step="0.1" value="0.3">
                 <span id="thresholdVal">0.3</span>
-                <p style="font-size: 0.75em; color: #94a3b8;">*Uses spatial block-variance approximation for JS limits.</p>
             </div>
 
             <div class="form-group">
@@ -188,6 +189,8 @@
             </div>
 
             <button class="action-btn" onclick="runProcess()">Run Process</button>
+            
+            <!-- THE DOWNLOAD BUTTON -->
             <button class="action-btn download-btn" onclick="downloadImage()">Download Stego Image (PNG)</button>
 
             <div class="form-group" style="margin-top: 15px;">
@@ -210,6 +213,9 @@
             </div>
         </main>
     </div>
+
+    <!-- LINKING THE LOGIC FILE -->
+    <script src="stego-logic.js"></script>
 
     <script>
         let currentAlgorithm = 'LSB';
@@ -250,9 +256,9 @@
 
         function downloadImage() {
             const canvas = document.getElementById('canvasAfter');
-            if(canvas.width === 300) { alert("Please run a process first!"); return; } // Default size check
+            if(canvas.width === 300) { alert("Please run a process first!"); return; } 
             const link = document.createElement('a');
-            link.download = `stego_${currentAlgorithm}.png`; // Always save as PNG for lossless!
+            link.download = `stego_${currentAlgorithm}.png`; 
             link.href = canvas.toDataURL('image/png');
             link.click();
         }
@@ -275,18 +281,40 @@
                     binaryMsg += payload[i].charCodeAt(0).toString(2).padStart(8, '0');
                 }
 
-                if (currentAlgorithm === 'LSB') embedLSB(imgData, binaryMsg);
-                else if (currentAlgorithm === 'MSB') embedMSB(imgData, binaryMsg);
-                else if (currentAlgorithm === 'PVD') embedPVD(imgData, binaryMsg);
-                else if (currentAlgorithm === 'BPCS') embedBPCS(imgData, binaryMsg);
+                // Routing to stego-logic.js
+                if (currentAlgorithm === 'LSB') {
+                    imgData = embedLSB(imgData, binaryMsg);
+                } else if (currentAlgorithm === 'MSB') {
+                    let target = parseInt(document.getElementById('msbBits').value);
+                    imgData = embedMSB(imgData, binaryMsg, target);
+                } else if (currentAlgorithm === 'PVD') {
+                    imgData = embedPVD(imgData, binaryMsg);
+                } else if (currentAlgorithm === 'BPCS') {
+                    let alpha = parseFloat(document.getElementById('bpcsThreshold').value);
+                    imgData = embedBPCS(imgData, binaryMsg, alpha);
+                }
+                
+                ctxAfter.putImageData(imgData, 0, 0);
+                alert(`${currentAlgorithm} Embedding Complete!`);
             } 
             else if (mode === 'extract') {
                 let currentAfterData = ctxAfter.getImageData(0, 0, document.getElementById('canvasAfter').width, document.getElementById('canvasAfter').height);
-                
-                if (currentAlgorithm === 'LSB') extractLSB(currentAfterData);
-                else if (currentAlgorithm === 'MSB') extractMSB(currentAfterData);
-                else if (currentAlgorithm === 'PVD') extractPVD(currentAfterData);
-                else if (currentAlgorithm === 'BPCS') extractBPCS(currentAfterData);
+                let extractedBinary = '';
+
+                // Routing to stego-logic.js
+                if (currentAlgorithm === 'LSB') {
+                    extractedBinary = extractLSB(currentAfterData);
+                } else if (currentAlgorithm === 'MSB') {
+                    let target = parseInt(document.getElementById('msbBits').value);
+                    extractedBinary = extractMSB(currentAfterData, target);
+                } else if (currentAlgorithm === 'PVD') {
+                    extractedBinary = extractPVD(currentAfterData);
+                } else if (currentAlgorithm === 'BPCS') {
+                    let alpha = parseFloat(document.getElementById('bpcsThreshold').value);
+                    extractedBinary = extractBPCS(currentAfterData, alpha);
+                }
+
+                renderExtractedText(extractedBinary);
             }
         }
 
@@ -303,193 +331,8 @@
                 document.getElementById('extractedOutput').value = extractedText.substring(0, delimiterIndex);
                 alert(`${currentAlgorithm} Extraction Complete!`);
             } else {
-                document.getElementById('extractedOutput').value = "No valid message found or image corrupted. Try adjusting settings or check the algorithm.";
+                document.getElementById('extractedOutput').value = "No valid message found or image corrupted.";
             }
-        }
-
-        // --- 1. LSB (Least Significant Bit) ---
-        function embedLSB(imgData, binaryMsg) {
-            let data = imgData.data;
-            let msgIndex = 0;
-            for (let i = 0; i < data.length; i++) {
-                if ((i + 1) % 4 === 0) continue; // Skip Alpha
-                if (msgIndex < binaryMsg.length) {
-                    data[i] = (data[i] & 0xFE) | parseInt(binaryMsg[msgIndex]);
-                    msgIndex++;
-                } else break;
-            }
-            ctxAfter.putImageData(imgData, 0, 0);
-            alert("LSB Embedding Complete!");
-        }
-
-        function extractLSB(imgData) {
-            let data = imgData.data;
-            let binaryMsg = '';
-            for (let i = 0; i < data.length; i++) {
-                if ((i + 1) % 4 === 0) continue;
-                binaryMsg += (data[i] & 1).toString();
-            }
-            renderExtractedText(binaryMsg);
-        }
-
-        // --- 2. MSB (Most Significant Bit) ---
-        function embedMSB(imgData, binaryMsg) {
-            let data = imgData.data;
-            let msgIndex = 0;
-            let targetBit = parseInt(document.getElementById('msbBits').value);
-            let mask = ~(1 << targetBit); // Creates mask to clear target bit
-
-            for (let i = 0; i < data.length; i++) {
-                if ((i + 1) % 4 === 0) continue; 
-                if (msgIndex < binaryMsg.length) {
-                    let bitToEmbed = parseInt(binaryMsg[msgIndex]);
-                    data[i] = (data[i] & mask) | (bitToEmbed << targetBit);
-                    msgIndex++;
-                } else break;
-            }
-            ctxAfter.putImageData(imgData, 0, 0);
-            alert(`MSB Embedding Complete! Notice the heavy visual distortion.`);
-        }
-
-        function extractMSB(imgData) {
-            let data = imgData.data;
-            let binaryMsg = '';
-            let targetBit = parseInt(document.getElementById('msbBits').value);
-            
-            for (let i = 0; i < data.length; i++) {
-                if ((i + 1) % 4 === 0) continue;
-                let extractedBit = (data[i] >> targetBit) & 1;
-                binaryMsg += extractedBit.toString();
-            }
-            renderExtractedText(binaryMsg);
-        }
-
-        // --- 3. PVD (Pixel-Value Differencing - Simplified 1D) ---
-        function embedPVD(imgData, binaryMsg) {
-            let data = imgData.data;
-            let msgIndex = 0;
-            // Iterate in pairs (skipping alpha)
-            for (let i = 0; i < data.length - 4; i += 8) {
-                if (msgIndex >= binaryMsg.length) break;
-                // For simplicity in JS demo, we just use the Red channel of pairs
-                let p1 = data[i];
-                let p2 = data[i + 4];
-                let diff = Math.abs(p1 - p2);
-                
-                // Simplified capacity: If difference is high (edge), embed 2 bits. If low (smooth), embed 1 bit.
-                let bitsToEmbed = diff > 15 ? 2 : 1; 
-                
-                let chunk = binaryMsg.substr(msgIndex, bitsToEmbed);
-                msgIndex += chunk.length;
-                chunk = chunk.padEnd(bitsToEmbed, '0'); // Safety padding
-                let val = parseInt(chunk, 2);
-
-                // Hide the data in the LSBs of p1 based on capacity determined by difference
-                let mask = ~(Math.pow(2, bitsToEmbed) - 1);
-                data[i] = (data[i] & mask) | val;
-            }
-            ctxAfter.putImageData(imgData, 0, 0);
-            alert("PVD Embedding Complete!");
-        }
-
-        function extractPVD(imgData) {
-            let data = imgData.data;
-            let binaryMsg = '';
-            for (let i = 0; i < data.length - 4; i += 8) {
-                let p1 = data[i];
-                let p2 = data[i + 4];
-                // In a perfect PVD, extracting requires recalculating difference without the hidden bits
-                // For this simplified demo, we approximate the original difference region
-                let diff = Math.abs(p1 - p2);
-                let bitsToExtract = diff > 15 ? 2 : 1;
-                
-                let mask = (Math.pow(2, bitsToExtract) - 1);
-                let extractedVal = p1 & mask;
-                binaryMsg += extractedVal.toString(2).padStart(bitsToExtract, '0');
-            }
-            renderExtractedText(binaryMsg);
-        }
-
-        // --- 4. BPCS (Block Variance Approximation) ---
-        function embedBPCS(imgData, binaryMsg) {
-            let data = imgData.data;
-            let msgIndex = 0;
-            let width = imgData.width;
-            let threshold = parseFloat(document.getElementById('bpcsThreshold').value) * 255; 
-            
-            let blockSize = 8;
-            
-            // Loop through image in 8x8 blocks
-            for (let y = 0; y < imgData.height - blockSize; y += blockSize) {
-                for (let x = 0; x < width - blockSize; x += blockSize) {
-                    if (msgIndex >= binaryMsg.length) break;
-
-                    // Calculate rough complexity/variance of the block
-                    let minVal = 255, maxVal = 0;
-                    for (let by = 0; by < blockSize; by++) {
-                        for (let bx = 0; bx < blockSize; bx++) {
-                            let idx = ((y + by) * width + (x + bx)) * 4;
-                            let gray = (data[idx] + data[idx+1] + data[idx+2]) / 3;
-                            if (gray < minVal) minVal = gray;
-                            if (gray > maxVal) maxVal = gray;
-                        }
-                    }
-                    
-                    let complexity = maxVal - minVal;
-
-                    // If block is "complex" enough (noisy), embed data heavily
-                    if (complexity > threshold) {
-                        for (let by = 0; by < blockSize; by++) {
-                            for (let bx = 0; bx < blockSize; bx++) {
-                                if (msgIndex >= binaryMsg.length) break;
-                                let idx = ((y + by) * width + (x + bx)) * 4;
-                                // Embed in 2 least significant bits to simulate high capacity
-                                let chunk = binaryMsg.substr(msgIndex, 2).padEnd(2, '0');
-                                let val = parseInt(chunk, 2);
-                                data[idx] = (data[idx] & 0xFC) | val; // Red channel only for demo
-                                msgIndex += 2;
-                            }
-                        }
-                    }
-                }
-            }
-            ctxAfter.putImageData(imgData, 0, 0);
-            alert(`BPCS (Spatial Approx) Embedding Complete! Threshold applied: ${threshold}`);
-        }
-
-        function extractBPCS(imgData) {
-            let data = imgData.data;
-            let binaryMsg = '';
-            let width = imgData.width;
-            let threshold = parseFloat(document.getElementById('bpcsThreshold').value) * 255; 
-            let blockSize = 8;
-
-            for (let y = 0; y < imgData.height - blockSize; y += blockSize) {
-                for (let x = 0; x < width - blockSize; x += blockSize) {
-                    let minVal = 255, maxVal = 0;
-                    for (let by = 0; by < blockSize; by++) {
-                        for (let bx = 0; bx < blockSize; bx++) {
-                            let idx = ((y + by) * width + (x + bx)) * 4;
-                            // Mask out the hidden bits to roughly recreate original complexity
-                            let gray = ((data[idx]&0xFC) + data[idx+1] + data[idx+2]) / 3;
-                            if (gray < minVal) minVal = gray;
-                            if (gray > maxVal) maxVal = gray;
-                        }
-                    }
-                    let complexity = maxVal - minVal;
-
-                    if (complexity > threshold) {
-                        for (let by = 0; by < blockSize; by++) {
-                            for (let bx = 0; bx < blockSize; bx++) {
-                                let idx = ((y + by) * width + (x + bx)) * 4;
-                                let extracted = (data[idx] & 3).toString(2).padStart(2, '0');
-                                binaryMsg += extracted;
-                            }
-                        }
-                    }
-                }
-            }
-            renderExtractedText(binaryMsg);
         }
     </script>
 </body>
